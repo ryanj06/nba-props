@@ -1,0 +1,48 @@
+name: Daily Model Retrain
+
+on:
+  schedule:
+    # Runs at 11am ET (3pm UTC) every day — after most injury reports drop
+    # and before afternoon/evening games tip off
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+    # Also allows you to trigger it manually from GitHub Actions tab
+    # useful for testing or forcing a retrain after a big trade
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1 — Check out your repo so the workflow can access your files
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # Step 2 — Set up Python 3.12 to match your local environment
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Step 3 — Install all dependencies from requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Step 4 — Run the training script
+      # This pulls fresh game logs, engineers features, trains all 10 models,
+      # and saves a new nba_models.pkl
+      - name: Retrain models
+        run: python train_model.py
+
+      # Step 5 — Commit and push the new nba_models.pkl back to the repo
+      # Without this step the new model just disappears when the workflow ends
+      # Streamlit Cloud watches your repo and picks up the new file automatically
+      - name: Commit updated model
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add nba_models.pkl
+          git diff --staged --quiet || git commit -m "chore: retrain models $(date +'%Y-%m-%d')"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
